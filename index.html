@@ -7,9 +7,71 @@
     <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
   </head>
   <body class="mixpanel-platform-body">
-    <h1>Hello, World!</h1>
+    <div id="dates"></div>
     <script>
-      // Run queries and display results here
+      // you could hard code dates (and use for example from: today-30days, to: today) in the params object below
+      // this is a date picker dropdown to substitute for that
+      var dateSelect = $('#dates').MPDatepicker();
+
+      var endpoint = '/api/2.0/segmentation/multiseg';
+      var dates = dateSelect.val();
+      var params =  {
+            'inner': 'properties["Viewer Company"]',
+            'outer': 'properties["Viewer"]',
+            'event': 'View Profile',
+            'from': dates.from,
+            'to': dates.to,
+            'type': 'general',
+            'unit': 'day'
+          };
+      
+      // get the data from the Mixpanel Segmentation API and reorganize it
+      MP.api.query(endpoint, params).done(function(results) {
+        var output = {},
+            query = results.data.values;
+        
+        _.each(_.keys(query), function(viewer){
+          var viewerObject = query[viewer]
+          
+          _.each(_.keys(viewerObject), function(company){
+            var companyObject = viewerObject[company]
+            
+            _.each(_.keys(companyObject), function(date){
+              if (companyObject[date] != 0) {
+                if (!output[date]) {
+                  output[date] = {};
+                }
+                if (!output[date][viewer]) {
+                  output[date][viewer] = {};
+                }
+                output[date][viewer][company] = companyObject[date];
+              }
+            });
+          });
+        });
+        
+        // ensure dates are in descending order (and most recent profile view is displayed first)
+        var dates = [];
+        _.each(_.keys(output), function(date) {
+          dates.push(date);
+        });
+        dates.sort();
+        dates.reverse();
+        
+        // loop through dates in order and append profile view notifications
+        _.each(dates, function(date) {
+          _.each(_.keys(output[date]), function(viewer) {
+            var company = Object.keys(output[date][viewer])[0];
+            var count = output[date][viewer][company];
+            var string = (count > 1) ? 
+              viewer + ' from ' + company + ' viewed your profile on ' + date + ' (' + count + ' times)' : 
+              viewer + ' from ' + company + ' viewed your profile on ' + date;
+            $('<div></div>').appendTo('body').text(string);
+          });
+        });
+
+      });
+
     </script>
   </body>
 </html>
